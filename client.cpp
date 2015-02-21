@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cstdlib>
 #include <boost/asio.hpp>
 #include <thread>
 
@@ -20,8 +21,8 @@ int main(int argc, char *argv[]) {
 	boost::asio::connect(s, resolver.resolve({argv[1], argv[2]}));
 
 	cout << "Enter message: ";
-	string request;
-	cin.getline(request, 1024);
+	string request = "";
+	getline(cin, request);
 	auto request_length = request.length();
 	boost::asio::write(s, boost::asio::buffer(request, request_length));
 

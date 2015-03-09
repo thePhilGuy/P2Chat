@@ -36,7 +36,7 @@ class Connection {
 		    l_addr.sin_port = 0; // Random port to be determined later
 
 		    /* Bind */
-		    if (bind(l_socket, (struct sockaddr *)&l_addr, sizeof(l_addr)) < 0)
+		    if (::bind(l_socket, (struct sockaddr *)&l_addr, sizeof(l_addr)) < 0)
 		    	// BETTER ERROR HANDLING 
 		        cerr << "bind() failed";
 
@@ -77,10 +77,11 @@ class Connection {
 				// BETTER ERROR HANDLING
 				cerr << "connect() failed";
 
+
 			if (write(client_socket, message.c_str(), message.length()) < 0)
 				//BETTER ERROR HANDLING
 				cerr << "write() failed";
-
+			::close(client_socket);
 		}
 
 	private:
@@ -136,6 +137,7 @@ class Client {
 			while(!m_stop) {
 				getline(cin, input);
 				cout << "Input: " << input << '\n';
+				connection.send(input);
 			}
 			cout << "Exiting gracefully ! \n";
 		}

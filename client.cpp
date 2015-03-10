@@ -15,8 +15,6 @@
 
 using namespace std;
 
-
-
 class Connection {
 	public:
 		Connection(string ip, int port) : ip{ip}, serverPort{port}, running{true}, incomingQueue{} {
@@ -28,6 +26,7 @@ class Connection {
 		~Connection() { // Close socket
 			running = false;
 			close(listeningSocket);
+			accept_thread.join();
 		 }
 
 		// void receive();
@@ -40,7 +39,7 @@ class Connection {
 			/* Connect to server */
 			if (connect(outgoingSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
 				// BETTER ERROR HANDLING
-				cerr << "connect() failed";
+				cerr << "connect() failed " << errno;
 
 			/* Send message and close connection */
 			if (write(outgoingSocket, message.c_str(), message.length()) < 0)
@@ -155,27 +154,31 @@ class Chat {
 	public:
 		Chat(string ip, int port) : running{true}, connection{ip, port} {
 			// synchronously identify here
+			string username;
+			string password;
+			cout << "username: ";
+			cin >> username;
+			cout << "password: ";
+			cin >> password;
 
+			connection.send(username + ' ' + password);
 		}
 
 		void stop() {
 			running = false; 
-			// receive_thread.join();
+			message_consumer.join();
 			input_thread.join();
-			cout << "input_thread joined \n";
 		}
 
 		void start() {
 			input_thread = thread(&Chat::init_input, this);
 			message_consumer = thread(&Chat::init_consumption, this);
-			// receive_thread = thread(&Chat::init_receive, this);
 		}
 
 	private:
 		Connection connection;
 		thread input_thread;
 		thread message_consumer;
-		thread message_producer;
 		atomic<bool> running;
 
 		void init_consumption() {

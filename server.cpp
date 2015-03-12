@@ -113,8 +113,21 @@ class User {
 		User(string n, string p) : 
 		name{n}, password{p}, online{false}, last {}, blacklist {}, addr {} { }
 
-		string getName() { return name; };
-		string getPassword() { return password; };
+		string getName() { return name; }
+		string getPassword() { return password; }
+
+		void login() {
+			online = true;
+			updateLast();
+		}
+
+		bool isOnline() {
+			return online;
+		}
+
+		void updateLast() {
+			last = chrono::high_resolution_clock::now();
+		}
 
 	private:
 		string name;
@@ -160,25 +173,40 @@ class MessageCenter {
 		}
 
 		bool authenticate(tuple<string, struct sockaddr_in> message) {
-			string username, password;
+			string username;
 			istringstream iss(get<0>(message));
 			iss >> username;
-			iss >> password;
 			cout << "Authenticating " << username << "\n";
-			for (auto user : users ) 
-				if (user.getName() == username && user.getPassword() == password) return true;
+			for (auto &user : users ) {
+				if (user.getName() == username) {
+					if (user.isOnline()) { 
+						return true; 
+					} else {
+						string password;
+						iss >> password;
+						if (user.getPassword() == password) {
+							user.login();
+							return true;
+						}
+					}
+				}
+			}
+			
 			return false;
 		}
 
 		void parseMessage(tuple<string, struct sockaddr_in> message) {
 			if (authenticate(message)) {
-				string text;
-				struct sockaddr_in addr;
-				tie (text, addr) = message;
-				istringstream iss(text);
-			    copy(istream_iterator<string>(iss),
-			         istream_iterator<string>(),
-			         ostream_iterator<string>(cout, "\n"));
+				cout << "user.isOnline() = " << users[0].isOnline() << "\n";
+
+				// string text;
+				// struct sockaddr_in addr;
+				// tie (text, addr) = message;
+				// istringstream iss(text);
+			 //    copy(istream_iterator<string>(iss),
+			 //         istream_iterator<string>(),
+			 //         ostream_iterator<string>(cout, "\n"));
+				cout << "Succes\n";
 			} else {
 				cout << "Invalid credentials\n";
 			}

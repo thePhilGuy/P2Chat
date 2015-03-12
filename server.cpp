@@ -131,13 +131,9 @@ class MessageCenter {
 			ifstream credentialsFile {credentials, ifstream::in};
 			cout << "Opened credentials\n";
 			if (credentialsFile.is_open()) {
-				string name;
-				string pass;
-				while (credentialsFile >> name && credentialsFile >> pass) {
-					User user {name, pass};
-					cout << user.getName() << " " << user.getPassword() << "\n";
-					users.push_back(user);
-				}
+				string name, pass;
+				while (credentialsFile >> name && credentialsFile >> pass) 
+					users.push_back(User {name, pass});
 			}
 		}
 
@@ -159,12 +155,23 @@ class MessageCenter {
 		void init_consumption() {
 			while(running) {
 				auto message = connection.popMessage();
-				async(launch::async, MessageCenter::parseMessage, message);
+				async(launch::async, &MessageCenter::parseMessage, this, message);
 			}
 		}
 
-		static void parseMessage(tuple<string, struct sockaddr_in> message) {
-			// if (authenticate(message)) {
+		bool authenticate(tuple<string, struct sockaddr_in> message) {
+			string username, password;
+			istringstream iss(get<0>(message));
+			iss >> username;
+			iss >> password;
+			cout << "Authenticating " << username << "\n";
+			for (auto user : users ) 
+				if (user.getName() == username && user.getPassword() == password) return true;
+			return false;
+		}
+
+		void parseMessage(tuple<string, struct sockaddr_in> message) {
+			if (authenticate(message)) {
 				string text;
 				struct sockaddr_in addr;
 				tie (text, addr) = message;
@@ -172,7 +179,9 @@ class MessageCenter {
 			    copy(istream_iterator<string>(iss),
 			         istream_iterator<string>(),
 			         ostream_iterator<string>(cout, "\n"));
-			// }
+			} else {
+				cout << "Invalid credentials\n";
+			}
 		}
 };	
 

@@ -305,7 +305,7 @@ int main(int argc, char *argv[]) {
 	MessageCenter center {port, "credentials.txt"};
 
 	center.start();
-	this_thread::sleep_for(chrono::seconds{20});
+	this_thread::sleep_for(chrono::seconds{3000});
 	center.stop();
 
 	return 0;

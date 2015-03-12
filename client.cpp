@@ -225,7 +225,7 @@ int main(int argc, char *argv[]) {
 	Chat chat {server_address, port};
 	
 	chat.start();
-	this_thread::sleep_for(chrono::seconds{30});
+	this_thread::sleep_for(chrono::seconds{3000});
 	chat.stop();	
 
 	return 0;

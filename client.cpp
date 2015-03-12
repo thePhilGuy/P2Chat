@@ -31,6 +31,7 @@ class Connection {
 
 		// void receive();
 		void send(string message) {
+			cout << "Sending: " << message;
 			/* Initialize connecting socket */
 			if ((outgoingSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 				// BETTER ERROR HANDLING
@@ -55,6 +56,10 @@ class Connection {
 			incomingQueue.pop();
 			lck.unlock();
 			return m;
+		}
+
+		auto getListeningPort() {
+			return to_string(listeningPort);
 		}
 
 	private:
@@ -161,7 +166,12 @@ class Chat {
 			cout << "password: ";
 			cin >> password;
 
-			connection.send(username + ' ' + password);
+			string credentials = username + ' ' + password + ' ' + connection.getListeningPort() + '\n';
+			chatUser = username;
+			connection.send(credentials);
+
+			// For some reason, flush the standard input
+			cin.ignore();
 		}
 
 		void stop() {
@@ -176,6 +186,7 @@ class Chat {
 		}
 
 	private:
+		string chatUser;
 		Connection connection;
 		thread input_thread;
 		thread message_consumer;
@@ -192,7 +203,7 @@ class Chat {
 			string input;
 			while(running) {
 				getline(cin, input);
-				connection.send(input);
+				connection.send(chatUser + ' ' + string(connection.getListeningPort())+ ' ' + input);
 			}
 		}
 

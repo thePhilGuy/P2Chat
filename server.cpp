@@ -14,8 +14,9 @@
 #include <string>
 #include <iterator>
 #include <fstream>
+#include <numeric>
 
-#define MAXPENDING 5
+#define MAXPENDING 0
 
 using namespace std;
 
@@ -38,6 +39,29 @@ class Connection {
 			incomingQueue.pop();
 			lck.unlock();
 			return m;
+		}
+
+		void send(string text, struct sockaddr_in addr) {
+
+			cout << "Sending to client on port: " << ntohs(addr.sin_port) << "\n";
+
+			int outgoingSocket;
+
+			/* Initialize connecting socket */
+			if ((outgoingSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+				// BETTER ERROR HANDLING
+				cerr << "socket() failed";
+
+			/* Connect to server */
+			if (connect(outgoingSocket, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+				// BETTER ERROR HANDLING
+				cerr << "connect() failed " << errno;
+
+			/* Send message and close connection */
+			if (write(outgoingSocket, text.c_str(), text.length()) < 0)
+				//BETTER ERROR HANDLING
+				cerr << "write() failed";
+			::close(outgoingSocket);
 		}
 
 	private:
@@ -88,6 +112,7 @@ class Connection {
 				if ((incomingSocket = accept(listeningSocket, (struct sockaddr *)&incomingAddr, &incAddrLen)) < 0)
 					// BETTER ERROR HANDLING
 					cerr << "accept() failed";
+					cout << "accepted someone\n";
 					async(launch::async, &Connection::read_message, this, incomingSocket, incomingAddr);
 			}
 		}
@@ -99,7 +124,9 @@ class Connection {
 			char buffer [256];
 			memset(buffer, 0, sizeof buffer);
 			
-			if (fgets(buffer, sizeof buffer, fp) == NULL) cerr << "fgets() failed";
+			if (fgets(buffer, sizeof buffer, fp) == NULL) {
+				cerr << "fgets() failed with errno: " << errno << "\n";
+			}
 			fclose(fp);
 
 			unique_lock<mutex> lck {incomingMutex};
@@ -111,7 +138,7 @@ class Connection {
 class User {
 	public:
 		User(string n, string p) : 
-		name{n}, password{p}, online{false}, last {}, blacklist {}, addr {} { }
+		name{n}, password{p}, online{false}, last {}, blacklist {}, addr {}, logAttempts {0} { }
 
 		string getName() { return name; }
 		string getPassword() { return password; }
@@ -121,12 +148,23 @@ class User {
 			updateLast();
 		}
 
+		void failAuth() { ++ logAttempts; }
+
 		bool isOnline() {
 			return online;
 		}
 
 		void updateLast() {
 			last = chrono::high_resolution_clock::now();
+		}
+
+		auto getAddr() {
+			return addr;
+		}
+
+		void updateAddress(struct sockaddr_in address, int &port) {
+			addr = address;
+			addr.sin_port = htons(port);
 		}
 
 	private:
@@ -136,6 +174,7 @@ class User {
 		chrono::high_resolution_clock::time_point last;
 		vector<string> blacklist;
 		struct sockaddr_in addr;
+		int logAttempts;
 };
 
 class MessageCenter {
@@ -179,36 +218,77 @@ class MessageCenter {
 			cout << "Authenticating " << username << "\n";
 			for (auto &user : users ) {
 				if (user.getName() == username) {
-					if (user.isOnline()) { 
+					if (user.isOnline()) {
+						int port;
+						iss >> port;
+						user.updateAddress(get<1>(message), port); 
 						return true; 
 					} else {
 						string password;
 						iss >> password;
 						if (user.getPassword() == password) {
 							user.login();
+							int port;
+							iss >> port;
+							user.updateAddress(get<1>(message), port); 
 							return true;
+						} else { 
+							user.failAuth();
+							return false; 
 						}
 					}
 				}
 			}
-			
+
 			return false;
 		}
 
 		void parseMessage(tuple<string, struct sockaddr_in> message) {
-			if (authenticate(message)) {
-				cout << "user.isOnline() = " << users[0].isOnline() << "\n";
 
-				// string text;
-				// struct sockaddr_in addr;
-				// tie (text, addr) = message;
-				// istringstream iss(text);
-			 //    copy(istream_iterator<string>(iss),
-			 //         istream_iterator<string>(),
-			 //         ostream_iterator<string>(cout, "\n"));
-				cout << "Succes\n";
+			if (authenticate(message)) {
+				string text;
+				struct sockaddr_in addr;
+				tie (text, addr) = message;
+				istringstream iss(text);
+
+				/* Separate input into tokens */
+				vector<string> tokens{istream_iterator<string>{iss},
+                      			      istream_iterator<string>{}};
+
+                for (auto &s : tokens ) cout << s << "\n";
+
+                if (tokens[2] == "message") {
+                	/* Transfer message along to target */
+                	async(launch::async, &MessageCenter::message, this, tokens, addr);
+                } else if (tokens[2] == "online") {
+
+                } else if (tokens[2] == "broadcast") {
+
+                } else if (tokens[2] == "block") {
+
+                } else if (tokens[2] == "unblock") {
+
+                } else if (tokens[2] == "logout") {
+
+                } 
 			} else {
 				cout << "Invalid credentials\n";
+			}
+		}
+
+		void message(vector<string> tokens, struct sockaddr_in addr) {
+			cout << "processing message sending \n";
+			/* Expected Format:
+			 * <sender> <port> message <target> <text>
+			 */
+			string sender = tokens[0];
+			string target = tokens[3];
+			string text;
+			text = accumulate(begin(tokens) + 4, end(tokens), text);
+
+			for (auto &user : users ) {
+				if (user.getName() == target && user.isOnline()) 
+					connection.send(text, user.getAddr());
 			}
 		}
 };	

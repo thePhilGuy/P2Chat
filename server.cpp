@@ -15,8 +15,9 @@
 #include <iterator>
 #include <fstream>
 #include <numeric>
+#include <algorithm>
 
-#define MAXPENDING 0
+#define MAXPENDING 5
 
 using namespace std;
 
@@ -167,6 +168,26 @@ class User {
 			addr.sin_port = htons(port);
 		}
 
+		void block(string target) {
+			bool listed = false;
+			for (auto &blacklisted : blacklist ) {
+				if (blacklisted == target) {
+					cout << "User already blacklisted. \n";
+					listed = true;
+				}
+			} 
+			if (!listed) blacklist.push_back(target);
+		}
+
+		void unblock(string target) {
+			remove(blacklist.begin(), blacklist.end(), target);
+		}
+
+		void logout() {
+			updateLast();
+			online = false;
+		}
+
 	private:
 		string name;
 		string password;
@@ -261,15 +282,20 @@ class MessageCenter {
                 	/* Transfer message along to target */
                 	async(launch::async, &MessageCenter::message, this, tokens, addr);
                 } else if (tokens[2] == "online") {
-
+                	/* List connected users */
+                	async(launch::async, &MessageCenter::online, this, tokens, addr);
                 } else if (tokens[2] == "broadcast") {
-
+                	/* Transfer message along to all connected users */
+                	async(launch::async, &MessageCenter::broadcast, this, tokens, addr);
                 } else if (tokens[2] == "block") {
-
+                	/* Add target to sender's blacklist */
+                	async(launch::async, &MessageCenter::block, this, tokens, addr);
                 } else if (tokens[2] == "unblock") {
-
+                	/* Remove target from sender's blacklist */
+                	async(launch::async, &MessageCenter::unblock, this, tokens, addr);
                 } else if (tokens[2] == "logout") {
-
+                	/* Log out sender */
+                	async(launch::async, &MessageCenter::logout, this, tokens, addr);
                 } 
 			} else {
 				cout << "Invalid credentials\n";
@@ -286,11 +312,79 @@ class MessageCenter {
 			string text;
 			text = accumulate(begin(tokens) + 4, end(tokens), text);
 
-			for (auto &user : users ) {
+			for (auto &user : users) {
 				if (user.getName() == target && user.isOnline()) 
 					connection.send(text, user.getAddr());
 			}
 		}
+
+		void online(vector<string> tokens, struct sockaddr_in addr) {
+			/* Expected Format:
+			 * <sender> <port> online
+			 */
+
+			string usersOnline {};
+
+			for (auto &user : users) 
+			 	if (user.isOnline()) usersOnline += user.getName();
+			
+			connection.send(usersOnline, addr);
+		}
+
+		void broadcast(vector<string> tokens, struct sockaddr_in addr) {
+			/* Expected Format:
+			 * <sender> <port> broadcast <text>
+			 */
+			 string sender = tokens[0];
+			 string text; 
+			 text = accumulate(begin(tokens) + 3, end(tokens), text);
+
+			 for (auto &user : users) {
+			 	if (user.isOnline()) connection.send(text, user.getAddr());
+			 }
+		}
+
+		void block (vector<string> tokens, struct sockaddr_in addr) {
+			/* Expected Format:
+			 * <sender> <port> block <target>
+			 */
+			string sender = tokens[0];
+			string target = tokens[3];
+
+			for (auto &user : users) {
+				if (user.getName() == sender) {
+					user.block(target);
+				}
+			}
+		}
+
+		void unblock (vector<string> tokens, struct sockaddr_in addr) {
+			/* Expected Format:
+			 * <sender> <port> unblock <target>
+			 */
+			string sender = tokens[0];
+			string target = tokens[3];
+
+			for (auto &user : users) {
+				if (user.getName() == sender) {
+					user.unblock(target);
+				}
+			}
+		}
+
+		void logout (vector<string> tokens, struct sockaddr_in addr) {
+			/* Expected Format:
+			 * <sender> <port> logout
+			 */
+			string sender = tokens[0];
+		
+			for (auto &user : users) {
+				if (user.getName() == sender) {
+					user.logout();
+				}
+			}
+		}
+
 };	
 
 int main(int argc, char *argv[]) {

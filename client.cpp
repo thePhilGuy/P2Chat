@@ -10,8 +10,15 @@
 #include <chrono>
 #include <future>
 #include <queue>
+#include <sstream>
+#include <string>
+#include <iterator>
+#include <fstream>
+#include <numeric>
+#include <algorithm>
 
 #define MAXPENDING 5
+#define HEARTBEAT_DELAY 30
 
 using namespace std;
 
@@ -31,7 +38,7 @@ class Connection {
 
 		// void receive();
 		void send(string message) {
-			cout << "Sending: " << message;
+			cout << "Sending: " << message << "\n";
 			/* Initialize connecting socket */
 			if ((outgoingSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 				// BETTER ERROR HANDLING
@@ -47,6 +54,29 @@ class Connection {
 				//BETTER ERROR HANDLING
 				cerr << "write() failed";
 			::close(outgoingSocket);
+		}
+
+		void send(string text, struct sockaddr_in addr) {
+
+			cout << "Sending to client on port: " << ntohs(addr.sin_port) << "\n";
+
+			int outSocket;
+
+			/* Initialize connecting socket */
+			if ((outSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+				// BETTER ERROR HANDLING
+				cerr << "socket() failed";
+
+			/* Connect to server */
+			if (connect(outSocket, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+				// BETTER ERROR HANDLING
+				cerr << "connect() failed " << errno;
+
+			/* Send message and close connection */
+			if (write(outSocket, text.c_str(), text.length()) < 0)
+				//BETTER ERROR HANDLING
+				cerr << "write() failed";
+			::close(outSocket);
 		}
 
 		string popMessage() {
@@ -157,7 +187,7 @@ class Connection {
 
 class Chat {
 	public:
-		Chat(string ip, int port) : running{true}, connection{ip, port} {
+		Chat(string ip, int port) : running{true}, connection{ip, port}, peers{} {
 			// synchronously identify here
 			string username;
 			string password;
@@ -178,11 +208,17 @@ class Chat {
 			running = false; 
 			message_consumer.join();
 			input_thread.join();
+			heartbeat_thread.join();
 		}
 
 		void start() {
 			input_thread = thread(&Chat::init_input, this);
 			message_consumer = thread(&Chat::init_consumption, this);
+			heartbeat_thread = thread(&Chat::init_heartbeat, this);
+		}
+
+		bool isRunning() {
+			return running;
 		}
 
 	private:
@@ -190,12 +226,15 @@ class Chat {
 		Connection connection;
 		thread input_thread;
 		thread message_consumer;
+		thread heartbeat_thread;
 		atomic<bool> running;
+		/* peer : name address port */
+		vector<tuple<string, struct sockaddr_in>> peers;
 
 		void init_consumption() {
 			while(running) {
 				string message = connection.popMessage();
-				async(launch::async, Chat::parseMessage, message);
+				async(launch::async, &Chat::parseMessage, this, message);
 			}	
 		}
 
@@ -203,12 +242,85 @@ class Chat {
 			string input;
 			while(running) {
 				getline(cin, input);
-				connection.send(chatUser + ' ' + string(connection.getListeningPort())+ ' ' + input);
+				istringstream iss(input);
+				string command;
+				iss >> command;
+				if (command == "private") {
+					async(launch::async, &Chat::privateMessage, this, input);
+				} else {
+					connection.send(chatUser + ' ' + 
+									string(connection.getListeningPort()) + 
+									' ' + input);
+				}
 			}
 		}
 
-		static void parseMessage (string message) { 
-			cout << "Received: " << message << "\n";
+		void privateMessage(string input) {
+			/* Expected Format:
+			 * private <target> <message>
+			 */
+
+			istringstream iss(input);
+			/* Separate input into tokens */
+			vector<string> tokens{istream_iterator<string>{iss},
+                  			      istream_iterator<string>{}};
+
+            string target = tokens[1];
+            string message;
+            for (int i = 2; i < tokens.size(); ++i) message += tokens[i] + " ";
+
+            for (auto &peer : peers ) {
+            	if (get<0>(peer) == target) {
+            		connection.send(message, get<1>(peer));
+            	}
+            }
+
+		}
+
+		void init_heartbeat() {
+			while(running) {
+				this_thread::sleep_for(chrono::seconds{HEARTBEAT_DELAY});
+				connection.send(chatUser + ' ' + string(connection.getListeningPort())+ " heartbeat\n");
+			}
+		}
+
+		void rememberPeer(vector<string> tokens) {
+			// addr columbia 127.0.0.1 49229
+			string name = tokens[1];
+			string address = tokens[2];
+			int port = stoi(tokens[3]);
+
+			struct sockaddr_in peer;
+
+			// Better name later
+			struct hostent *s_host;
+			s_host = gethostbyname(address.c_str());
+
+			/* Build server address structure */
+		    peer = {};     	
+		    peer.sin_family = AF_INET;               
+		    memcpy((char *) s_host->h_addr, // Copy given server hostname to server address
+		    	   (char *)&peer.sin_addr.s_addr, s_host->h_length);
+		    peer.sin_port = htons(port); 
+
+		    peers.push_back(tuple<string, struct sockaddr_in> {name, peer});
+
+		}
+
+		void parseMessage (string message) {
+
+			istringstream iss(message);
+			/* Separate input into tokens */
+			vector<string> tokens{istream_iterator<string>{iss},
+                  			      istream_iterator<string>{}};
+
+			if (tokens[0] == "logout") {
+				stop();
+			} else if (tokens[0] == "addr") {
+				rememberPeer(tokens);
+			} else {
+				cout << message << "\n";
+			}
 		};
 };
 
@@ -225,8 +337,9 @@ int main(int argc, char *argv[]) {
 	Chat chat {server_address, port};
 	
 	chat.start();
-	this_thread::sleep_for(chrono::seconds{3000});
-	chat.stop();	
+	while(chat.isRunning())
+		this_thread::sleep_for(chrono::seconds{10});
+	// chat.stop();	
 
 	return 0;
 }

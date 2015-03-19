@@ -113,7 +113,6 @@ class Connection {
 				if ((incomingSocket = accept(listeningSocket, (struct sockaddr *)&incomingAddr, &incAddrLen)) < 0)
 					// BETTER ERROR HANDLING
 					cerr << "accept() failed";
-					cout << "accepted someone\n";
 					async(launch::async, &Connection::read_message, this, incomingSocket, incomingAddr);
 			}
 		}
@@ -180,7 +179,19 @@ class User {
 		}
 
 		void unblock(string target) {
-			remove(blacklist.begin(), blacklist.end(), target);
+			for (int i = 0; i < blacklist.size(); ++i) {
+				if (blacklist[i] == target) blacklist.erase(begin(blacklist) + i);
+			}
+		}
+
+		bool isBlacklisted(string sender) {
+			for (auto &blacklisted : blacklist ) {
+				if (blacklisted == sender) {
+					cout << sender << " already blacklisted. \n";
+					return true;
+				}
+			}
+			return false;
 		}
 
 		void logout() {
@@ -278,6 +289,9 @@ class MessageCenter {
 
                 for (auto &s : tokens ) cout << s << "\n";
 
+                /* Update port in addr */
+                addr.sin_port = htons(stoi(tokens[1]));
+
                 if (tokens[2] == "message") {
                 	/* Transfer message along to target */
                 	async(launch::async, &MessageCenter::message, this, tokens, addr);
@@ -296,25 +310,48 @@ class MessageCenter {
                 } else if (tokens[2] == "logout") {
                 	/* Log out sender */
                 	async(launch::async, &MessageCenter::logout, this, tokens, addr);
-                } 
+                } else if (tokens[2] == "getaddress") {
+                	/* Send target ip */
+                	async(launch::async, &MessageCenter::getaddress, this, tokens, addr);
+                }
 			} else {
 				cout << "Invalid credentials\n";
 			}
 		}
 
+		void getaddress(vector<string> tokens, struct sockaddr_in addr) {
+			/* Expected Format:
+			 * <sender> <port> getaddress <target>
+			 */
+
+			string sender = tokens[0];
+			string target = tokens[3];
+
+			for (auto &user : users) {
+				if (user.getName() == target
+					&& !user.isBlacklisted(sender)) {
+					string ip = inet_ntoa(user.getAddr().sin_addr);
+					int port = ntohs(user.getAddr().sin_port);
+					connection.send("addr " + target + ' ' + ip + ' ' + to_string(port), addr);
+				}
+			}
+		}
+
 		void message(vector<string> tokens, struct sockaddr_in addr) {
-			cout << "processing message sending \n";
 			/* Expected Format:
 			 * <sender> <port> message <target> <text>
 			 */
 			string sender = tokens[0];
 			string target = tokens[3];
 			string text;
-			text = accumulate(begin(tokens) + 4, end(tokens), text);
+			for (int i = 4; i < tokens.size(); ++i) text += tokens[i] + " ";
+			// text = accumulate(begin(tokens) + 4, end(tokens), text);
 
 			for (auto &user : users) {
-				if (user.getName() == target && user.isOnline()) 
-					connection.send(text, user.getAddr());
+				if (user.getName() == target 
+					&& user.isOnline()
+					&& !user.isBlacklisted(sender)) 
+					connection.send(sender + ": " + text, user.getAddr());
 			}
 		}
 
@@ -326,7 +363,7 @@ class MessageCenter {
 			string usersOnline {};
 
 			for (auto &user : users) 
-			 	if (user.isOnline()) usersOnline += user.getName();
+			 	if (user.isOnline()) usersOnline += user.getName() + ", ";
 			
 			connection.send(usersOnline, addr);
 		}
@@ -337,10 +374,11 @@ class MessageCenter {
 			 */
 			 string sender = tokens[0];
 			 string text; 
-			 text = accumulate(begin(tokens) + 3, end(tokens), text);
+			 for (int i = 3; i < tokens.size(); ++i) text += tokens[i] + " ";
+			 // text = accumulate(begin(tokens) + 3, end(tokens), text);
 
 			 for (auto &user : users) {
-			 	if (user.isOnline()) connection.send(text, user.getAddr());
+			 	if (user.isOnline()) connection.send(sender + ": " + text, user.getAddr());
 			 }
 		}
 
@@ -383,6 +421,9 @@ class MessageCenter {
 					user.logout();
 				}
 			}
+
+			/* Send logout signal back to client */
+			connection.send("logout", addr);
 		}
 
 };	

@@ -32,6 +32,12 @@ Transceiver::Transceiver(int destination_port, string destination_ip) :
 	init_send();
 }
 
+Transceiver::~Transceiver() {
+	running = false;
+	close(listenSocket);
+	acceptThread.join();	
+}
+
 void Transceiver::init_listen() {
 	/* Initialize listening socket */
 	if ((listeningSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
@@ -51,5 +57,5 @@ void Transceiver::init_listen() {
 	if (listen(listeningSocket, MAXPENDING) < 0)
 		cerr << "listen() failed";
 
-	accept_thread = thread(&Connection::accept_messages, this);
+	acceptThread = thread(&Transceiver::accept_messages, this);
 }

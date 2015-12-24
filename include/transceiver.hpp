@@ -69,7 +69,7 @@ private:
 	address destinationAddr;
 
 	atomic<bool> running;
-	thread accept_thread;
+	thread acceptThread;
 
 	queue<tuple<string, address>> incomingQueue;
 	condition_variable hasIncoming;
@@ -79,7 +79,7 @@ protected:
 	void init_listen();
 	void init_send();
 	void accept_messages();
-	void handle_message(int sock, address addr);	
+	void enqueue_message(int sock, address addr);	
 };
 
 #endif // TRANSCEIVER_HPP

@@ -43,15 +43,50 @@ Transceiver::~Transceiver() {
 }
 
 void send(string message) {
+	/* Initialize connecting socket */
+	if ((outgoing_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+		// BETTER ERROR HANDLING
+		cerr << "socket() failed";
 
+	/* Connect to server */
+	if (connect(outgoing_socket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
+		// BETTER ERROR HANDLING
+		cerr << "connect() failed " << errno;
+
+	/* Send message and close connection */
+	if (write(outgoing_socket, message.c_str(), message.length()) < 0)
+		//BETTER ERROR HANDLING
+		cerr << "write() failed";
+	::close(outgoing_socket);
 }
 
 void send(string text, address addr) {
+	int outgoing_socket;
 
+	/* Initialize connecting socket */
+	if ((outgoing_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+		// BETTER ERROR HANDLING
+		cerr << "socket() failed";
+
+	/* Connect to server */
+	if (connect(outgoing_socket, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+		// BETTER ERROR HANDLING
+		cerr << "connect() failed " << errno;
+
+	/* Send message and close connection */
+	if (write(outgoing_socket, text.c_str(), text.length()) < 0)
+		//BETTER ERROR HANDLING
+		cerr << "write() failed";
+	::close(outgoing_socket);
 }
 
 auto popMessage() {
-
+	unique_lock<mutex> lck{incomingMutex};
+	hasIncoming.wait(lck);
+	auto m = incomingQueue.front();
+	incomingQueue.pop();
+	lck.unlock();
+	return m;
 }
 
 int getListenPort() {
@@ -108,10 +143,21 @@ void Transceiver::accept_messages() {
 		if ((incoming_socket = accept(listeningSocket, (struct sockaddr *)&incoming_addr, &inc_addr_len)) < 0)
 			// BETTER ERROR HANDLING
 			cerr << "accept() failed";
-			async(launch::async, &Transceiver::read_message, this, incoming_socket, incoming_addr);
+			async(launch::async, &Transceiver::enqueue_message, this, incoming_socket, incoming_addr);
 	}
 }
 
 void Transceiver::enqueue_message(int sock, address addr) {
+	FILE *fp = fdopen(sock, "r");
+	if (fp == NULL) cerr << "fdopen() failed"; // switch this with a try
 
+	char buffer [256];
+	memset(buffer, 0, sizeof buffer);
+
+	if (fgets(buffer, sizeof buffer, fp) == NULL) cerr << "fgets() failed"; // include in first try
+	fclose(fp);
+
+	unique_lock<mutex> lck {incomingMutex};
+	incomingQueue.push(tuple<string, address> {string(buffer), addr});
+	hasIncoming.notify_one();
 }

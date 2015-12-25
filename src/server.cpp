@@ -16,6 +16,7 @@
 #include <fstream>
 #include <numeric>
 #include <algorithm>
+#include "transceiver.hpp"
 
 #define MAXPENDING 5
 
@@ -80,23 +81,23 @@ class Connection {
 		void init_listen() {
 		    /* Initialize listening socket */
 		    if ((listeningSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-		    	// BETTER ERROR HANDLING 
+		    	// BETTER ERROR HANDLING
 		        cerr << "socket() failed";
-		      
+
 		    /* Build listening address structure */
-		    listeningAddr = {};     	
-		    listeningAddr.sin_family = AF_INET;                
-		    listeningAddr.sin_addr.s_addr = htonl(INADDR_ANY); 
-		    listeningAddr.sin_port = htons(listeningPort); 
+		    listeningAddr = {};
+		    listeningAddr.sin_family = AF_INET;
+		    listeningAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+		    listeningAddr.sin_port = htons(listeningPort);
 
 		    /* Bind */
 		    if (::bind(listeningSocket, (struct sockaddr *)&listeningAddr, sizeof(listeningAddr)) < 0)
-		    	// BETTER ERROR HANDLING 
+		    	// BETTER ERROR HANDLING
 		        cerr << "bind() failed";
 		    cout << "Listening on port: " << listeningPort << "\n";
 		    /* Listen to incoming connections */
 		    if (listen(listeningSocket, MAXPENDING) < 0)
-		    	// BETTER ERROR HANDLING 
+		    	// BETTER ERROR HANDLING
 		        cerr << "listen() failed";
 
 		    accept_thread = thread(&Connection::accept_messages, this);
@@ -123,7 +124,7 @@ class Connection {
 
 			char buffer [256];
 			memset(buffer, 0, sizeof buffer);
-			
+
 			if (fgets(buffer, sizeof buffer, fp) == NULL) {
 				cerr << "fgets() failed with errno: " << errno << "\n";
 			}
@@ -137,7 +138,7 @@ class Connection {
 
 class User {
 	public:
-		User(string n, string p) : 
+		User(string n, string p) :
 		name{n}, password{p}, online{false}, last {}, blacklist {}, addr {}, logAttempts {0} { }
 
 		string getName() { return name; }
@@ -174,7 +175,7 @@ class User {
 					cout << "User already blacklisted. \n";
 					listed = true;
 				}
-			} 
+			}
 			if (!listed) blacklist.push_back(target);
 		}
 
@@ -216,7 +217,7 @@ class MessageCenter {
 			cout << "Opened credentials\n";
 			if (credentialsFile.is_open()) {
 				string name, pass;
-				while (credentialsFile >> name && credentialsFile >> pass) 
+				while (credentialsFile >> name && credentialsFile >> pass)
 					users.push_back(User {name, pass});
 			}
 		}
@@ -231,7 +232,7 @@ class MessageCenter {
 		}
 
 	private:
-		Connection connection;
+		Transceiver connection;
 		thread message_consumer;
 		atomic<bool> running;
 		vector<User> users;
@@ -253,8 +254,8 @@ class MessageCenter {
 					if (user.isOnline()) {
 						int port;
 						iss >> port;
-						user.updateAddress(get<1>(message), port); 
-						return true; 
+						user.updateAddress(get<1>(message), port);
+						return true;
 					} else {
 						string password;
 						iss >> password;
@@ -262,11 +263,11 @@ class MessageCenter {
 							user.login();
 							int port;
 							iss >> port;
-							user.updateAddress(get<1>(message), port); 
+							user.updateAddress(get<1>(message), port);
 							return true;
-						} else { 
+						} else {
 							user.failAuth();
-							return false; 
+							return false;
 						}
 					}
 				}
@@ -348,9 +349,9 @@ class MessageCenter {
 			// text = accumulate(begin(tokens) + 4, end(tokens), text);
 
 			for (auto &user : users) {
-				if (user.getName() == target 
+				if (user.getName() == target
 					&& user.isOnline()
-					&& !user.isBlacklisted(sender)) 
+					&& !user.isBlacklisted(sender))
 					connection.send(sender + ": " + text, user.getAddr());
 			}
 		}
@@ -362,9 +363,9 @@ class MessageCenter {
 
 			string usersOnline {};
 
-			for (auto &user : users) 
+			for (auto &user : users)
 			 	if (user.isOnline()) usersOnline += user.getName() + ", ";
-			
+
 			connection.send(usersOnline, addr);
 		}
 
@@ -373,7 +374,7 @@ class MessageCenter {
 			 * <sender> <port> broadcast <text>
 			 */
 			 string sender = tokens[0];
-			 string text; 
+			 string text;
 			 for (int i = 3; i < tokens.size(); ++i) text += tokens[i] + " ";
 			 // text = accumulate(begin(tokens) + 3, end(tokens), text);
 
@@ -415,7 +416,7 @@ class MessageCenter {
 			 * <sender> <port> logout
 			 */
 			string sender = tokens[0];
-		
+
 			for (auto &user : users) {
 				if (user.getName() == sender) {
 					user.logout();
@@ -426,10 +427,10 @@ class MessageCenter {
 			connection.send("logout", addr);
 		}
 
-};	
+};
 
 int main(int argc, char *argv[]) {
-	
+
 	if (argc != 2) {
 		cerr << "Usage: ./center <port>\n";
 		return 1;

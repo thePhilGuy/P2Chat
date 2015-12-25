@@ -16,6 +16,7 @@
 #include <fstream>
 #include <numeric>
 #include <algorithm>
+// #include "transceiver.hpp"
 
 #define MAXPENDING 5
 #define HEARTBEAT_DELAY 30
@@ -96,7 +97,7 @@ class Connection {
 		int listeningSocket;
 		int listeningPort;
 		struct sockaddr_in listeningAddr;
-		
+
 		string ip;
 		int serverPort;
 		int outgoingSocket;
@@ -112,23 +113,23 @@ class Connection {
 		void init_listen() {
 		    /* Initialize listening socket */
 		    if ((listeningSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-		    	// BETTER ERROR HANDLING 
+		    	// BETTER ERROR HANDLING
 		        cerr << "socket() failed";
-		      
+
 		    /* Build listening address structure */
-		    listeningAddr = {};     	
-		    listeningAddr.sin_family = AF_INET;                
-		    listeningAddr.sin_addr.s_addr = htonl(INADDR_ANY); 
+		    listeningAddr = {};
+		    listeningAddr.sin_family = AF_INET;
+		    listeningAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 		    listeningAddr.sin_port = 0; // Random port to be determined later
 
 		    /* Bind */
 		    if (::bind(listeningSocket, (struct sockaddr *)&listeningAddr, sizeof(listeningAddr)) < 0)
-		    	// BETTER ERROR HANDLING 
+		    	// BETTER ERROR HANDLING
 		        cerr << "bind() failed";
 
 		    /* Listen to incoming connections */
 		    if (listen(listeningSocket, MAXPENDING) < 0)
-		    	// BETTER ERROR HANDLING 
+		    	// BETTER ERROR HANDLING
 		        cerr << "listen() failed";
 
 		    /* Get client port number */
@@ -159,7 +160,7 @@ class Connection {
 
 			char buffer [256];
 			memset(buffer, 0, sizeof buffer);
-			
+
 			if (fgets(buffer, sizeof buffer, fp) == NULL) cerr << "fgets() failed";
 			fclose(fp);
 
@@ -174,11 +175,11 @@ class Connection {
 			s_host = gethostbyname(ip.c_str());
 
 			/* Build server address structure */
-		    serverAddr = {};     	
-		    serverAddr.sin_family = AF_INET;               
+		    serverAddr = {};
+		    serverAddr.sin_family = AF_INET;
 		    memcpy((char *) s_host->h_addr, // Copy given server hostname to server address
 		    	   (char *)&serverAddr.sin_addr.s_addr, s_host->h_length);
-		    serverAddr.sin_port = htons(serverPort); 
+		    serverAddr.sin_port = htons(serverPort);
 		}
 
 };
@@ -205,7 +206,7 @@ class Chat {
 		}
 
 		void stop() {
-			running = false; 
+			running = false;
 			message_consumer.join();
 			input_thread.join();
 			heartbeat_thread.join();
@@ -235,7 +236,7 @@ class Chat {
 			while(running) {
 				string message = connection.popMessage();
 				async(launch::async, &Chat::parseMessage, this, message);
-			}	
+			}
 		}
 
 		void init_input() {
@@ -248,8 +249,8 @@ class Chat {
 				if (command == "private") {
 					async(launch::async, &Chat::privateMessage, this, input);
 				} else {
-					connection.send(chatUser + ' ' + 
-									string(connection.getListeningPort()) + 
+					connection.send(chatUser + ' ' +
+									string(connection.getListeningPort()) +
 									' ' + input);
 				}
 			}
@@ -297,11 +298,11 @@ class Chat {
 			s_host = gethostbyname(address.c_str());
 
 			/* Build server address structure */
-		    peer = {};     	
-		    peer.sin_family = AF_INET;               
+		    peer = {};
+		    peer.sin_family = AF_INET;
 		    memcpy((char *) s_host->h_addr, // Copy given server hostname to server address
 		    	   (char *)&peer.sin_addr.s_addr, s_host->h_length);
-		    peer.sin_port = htons(port); 
+		    peer.sin_port = htons(port);
 
 		    peers.push_back(tuple<string, struct sockaddr_in> {name, peer});
 
@@ -325,7 +326,7 @@ class Chat {
 };
 
 int main(int argc, char *argv[]) {
-	
+
 	if (argc != 3) {
 		cerr << "Usage: ./client <server_address> <port>\n";
 		return 1;
@@ -335,11 +336,11 @@ int main(int argc, char *argv[]) {
 	int port = atoi(argv[2]);
 
 	Chat chat {server_address, port};
-	
+
 	chat.start();
 	while(chat.isRunning())
 		this_thread::sleep_for(chrono::seconds{10});
-	// chat.stop();	
+	// chat.stop();
 
 	return 0;
 }

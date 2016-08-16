@@ -9,7 +9,6 @@
 #include <thread>
 #include <atomic>
 #include <future>
-#include <chrono>
 
 #include <queue>
 #include <iterator>
@@ -28,7 +27,7 @@ public:
 	* Constructs a Transceiver object listening on given port
 	* \param listen_port port transceiver listens on for incoming tcp messages
 	*/
-	Transceiver(int listen_port); 
+	Transceiver(int listen_port);
 
 	/* Constructor
 	* Constructs a Transceiver object listening on given port with default destination
@@ -36,22 +35,25 @@ public:
 	* \param destination_port default destination port of transceiver messages
 	* \param destination_ip default destination ip of transceiver messages (human readable)
 	*/
-	Transceiver(int listen_port, int destination_port, string destination_ip);
+	Transceiver(int listen_port, int destination_port, std::string destination_ip);
 
 	/* Constructor
 	* Constructs a Transceiver object listening on random port with default destination
 	* \param destination_port default destination port of transceiver messages
 	* \param destination_ip default destination ip of transceiver messages (human readable)
 	*/
-	Transceiver(int destination_port, string destination_ip);
+	Transceiver(int destination_port, std::string destination_ip);
+
+	/// Destructor
+	~Transceiver();
 
 	/// Send message to default destination
-	void send(string message);
+	void send(std::string message);
 	/// Send message to given internet address
-	void send(string text, address addr);
+	void send(std::string text, address addr);
 
 	/// Remove received message and sender from queue.
-	tuple<string, address> popMessage;
+	std::tuple<std::string, address> popMessage();
 
 	/// Get the port on which transceiver receives incoming messages
 	int getListenPort();
@@ -63,23 +65,23 @@ private:
 	address listeningAddr;
 
 	// destination address information
-	string destinationIP;
+	std::string destinationIP;
 	int destinationPort;
 	int destinationSocket;
 	address destinationAddr;
 
-	atomic<bool> running;
-	thread acceptThread;
+	std::atomic<bool> running;
+	std::thread acceptThread;
 
-	queue<tuple<string, address>> incomingQueue;
-	condition_variable hasIncoming;
-	mutex incomingMutex;
+	std::queue<std::tuple<std::string, address>> incomingQueue;
+	std::condition_variable hasIncoming;
+	std::mutex incomingMutex;
 
 protected:
 	void init_listen();
 	void init_send();
 	void accept_messages();
-	void enqueue_message(int sock, address addr);	
+	void enqueue_message(int sock, address addr);
 };
 
 #endif // TRANSCEIVER_HPP

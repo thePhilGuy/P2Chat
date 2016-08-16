@@ -42,7 +42,7 @@ Transceiver::~Transceiver() {
 	acceptThread.join();
 }
 
-void send(string message) {
+void Transceiver::send(string message) {
 	/* Initialize connecting socket */
 	if ((outgoing_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 		// BETTER ERROR HANDLING
@@ -60,7 +60,7 @@ void send(string message) {
 	::close(outgoing_socket);
 }
 
-void send(string text, address addr) {
+void Transceiver::send(string text, address addr) {
 	int outgoing_socket;
 
 	/* Initialize connecting socket */

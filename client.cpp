@@ -16,9 +16,8 @@
 #include <fstream>
 #include <numeric>
 #include <algorithm>
-// #include "transceiver.hpp"
+#include "transceiver.hpp"
 
-#define MAXPENDING 5
 #define HEARTBEAT_DELAY 30
 
 using namespace std;
@@ -89,7 +88,7 @@ class Connection {
 			return m;
 		}
 
-		auto getListeningPort() {
+		string getListeningPort() {
 			return to_string(listeningPort);
 		}
 
@@ -224,7 +223,7 @@ class Chat {
 
 	private:
 		string chatUser;
-		Connection connection;
+		Transceiver connection;
 		thread input_thread;
 		thread message_consumer;
 		thread heartbeat_thread;

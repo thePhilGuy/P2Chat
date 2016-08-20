@@ -11,6 +11,7 @@
 #include <future>
 
 #include <queue>
+#include <tuple>
 #include <iterator>
 #include <algorithm>
 #include <numeric>
@@ -19,6 +20,11 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
+
+#include <cstdlib>
+#include <cstring>
+
+#define MAXPENDING 5
 
 class Transceiver {
 	using address = struct sockaddr_in;
@@ -56,7 +62,7 @@ public:
 	std::tuple<std::string, address> popMessage();
 
 	/// Get the port on which transceiver receives incoming messages
-	int getListenPort();
+	std::string getListenPort();
 
 private:
 	// Incoming address information
@@ -65,8 +71,8 @@ private:
 	address listeningAddr;
 
 	// destination address information
-	std::string destinationIP;
 	int destinationPort;
+	std::string destinationIP;
 	int destinationSocket;
 	address destinationAddr;
 

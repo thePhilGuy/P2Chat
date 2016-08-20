@@ -18,8 +18,6 @@
 #include <algorithm>
 #include "transceiver.hpp"
 
-#define MAXPENDING 5
-
 using namespace std;
 
 class Connection {

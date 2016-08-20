@@ -1,6 +1,7 @@
 #include "transceiver.hpp"
 
 using namespace std;
+using address = struct sockaddr_in;
 
 // =============================================================================
 // Public Functions
@@ -38,18 +39,19 @@ Transceiver::Transceiver(int destination_port, string destination_ip) :
 
 Transceiver::~Transceiver() {
 	running = false;
-	close(listenSocket);
+	close(listeningSocket);
 	acceptThread.join();
 }
 
 void Transceiver::send(string message) {
+	int outgoing_socket;
 	/* Initialize connecting socket */
 	if ((outgoing_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 		// BETTER ERROR HANDLING
 		cerr << "socket() failed";
 
 	/* Connect to server */
-	if (connect(outgoing_socket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
+	if (connect(outgoing_socket, (struct sockaddr *)&destinationAddr, sizeof(destinationAddr)) < 0)
 		// BETTER ERROR HANDLING
 		cerr << "connect() failed " << errno;
 
@@ -80,7 +82,7 @@ void Transceiver::send(string text, address addr) {
 	::close(outgoing_socket);
 }
 
-auto popMessage() {
+tuple<string, address> Transceiver::popMessage() {
 	unique_lock<mutex> lck{incomingMutex};
 	hasIncoming.wait(lck);
 	auto m = incomingQueue.front();
@@ -89,8 +91,8 @@ auto popMessage() {
 	return m;
 }
 
-int getListenPort() {
-
+string Transceiver::getListenPort() {
+	return to_string(listenPort);
 }
 
 // =============================================================================
@@ -143,7 +145,7 @@ void Transceiver::accept_messages() {
 		if ((incoming_socket = accept(listeningSocket, (struct sockaddr *)&incoming_addr, &inc_addr_len)) < 0)
 			// BETTER ERROR HANDLING
 			cerr << "accept() failed";
-			async(launch::async, &Transceiver::enqueue_message, this, incoming_socket, incoming_addr);
+		async(launch::async, &Transceiver::enqueue_message, this, incoming_socket, incoming_addr);
 	}
 }
 
